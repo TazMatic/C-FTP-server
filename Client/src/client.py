@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
 import sys
 import socket
+import argparse
+
+
+def parseCMD():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('hostname', help='Destination hostname or IP')
+    parser.add_argument('port', help='Destination port')
+    parser.add_argument('files', help='Input files to be sent', nargs='+')
+    parser.add_argument('-t', '--tcp', action='store_const',
+                        dest='tcp', help='Use TCP protocol: Default',
+                        required=False, default=True, const=True)
+    parser.add_argument('-u', '--udp', action='store_const',
+                        dest='udp', help='Use UDP protocol',
+                        required=False, default=False, const=True)
+
+    return parser.parse_args()
 
 
 def main():
     # Process command line arguaments
-    numberOfFiles = len(sys.argv)
-    helpString = "client.py host port protocal <...Files>"
-    if numberOfFiles < 5:
-        print("Error not enough arguments:", helpString)
-        return
-    # Store connection variables
-    host = sys.argv[1]
-    port = sys.argv[2]
-    proto = sys.argv[3]
-    numberOfFiles -= 4
+    args = parseCMD()
+    print(args)
 
-    # Establish Connection
-    if proto.lower() == "udp":
-        proto = socket.SOCK_DGRAM
-    elif proto.lower() == "tcp":
-        proto = socket.SOCK_STREAM
-    else:
-        print("Invalid protocol: Please select UPD or TCP")
-        return
-    print("Made it")
 if __name__ == '__main__':
     try:
         main()
