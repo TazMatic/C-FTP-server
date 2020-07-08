@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
-import sys
 import socket
 import argparse
 import os
+
+
+class package:
+    def __init__(self, type, content):
+        self.type = type
+        self.content = content
+
+    def send(self, sock):
+        sock.send(bytes(self.type))
+        sock.sendall(bytes(self.content))
 
 
 def parseCMD():
@@ -36,15 +45,17 @@ def main():
         for file in args.files:
             try:
                 if os.stat(file).st_size > 0:
-                    # send contents
                     FHandle = open(file, "r")
-                    sock.sendall(bytes(FHandle.read()))
+                    data = package(0, FHandle.read())
+                    # send contents
+                    data.send(sock)
                 else:
                     print("Invalid file type, Skipping ({})".format(file))
                     continue
             except OSError:
                 print("Unable to open", file)
-        sock.close()
+            finally:
+                sock.close()
 
     except socket.error as e:
         print(e)
