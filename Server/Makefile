@@ -1,5 +1,6 @@
 CFLAGS += -std=c11 -pthread -Wall -Wextra -Wpedantic -Waggregate-return -Wwrite-strings -Wvla -Wfloat-equal -D_DEFAULT_SOURCE
 LDFLAGS += -pthread
+LDLIBS += -lcrypto -lssl
 
 PROG1 = server
 

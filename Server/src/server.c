@@ -13,6 +13,7 @@
 
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <openssl/md5.h>
 
 
 int max(int x, int y)
@@ -26,6 +27,7 @@ int max(int x, int y)
 void *service_tcp(void *arg);
 void *service_udp(void *arg);
 long extract_type(char *message, unsigned int strLen);
+char *str2md5(const char *str, int length);
 
 struct remote_endpoint {
     int fd;
@@ -153,13 +155,27 @@ void *service_tcp(void *arg)
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
 
     char buffer[75535];
+    //TODO ABC
+    char *message = malloc(75535);
+    unsigned int message_size = 75535;
     ssize_t received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
     long type = extract_type(buffer, received);
+    //TODO build a full message string to get hash and return it to cient
     while(received > 0) {
+        if (strlen(message) + received > message_size)
+        {
+            message_size *= 2;
+            //TODO ABC
+            realloc(message, message_size);
+        }
         buffer[received] = '\0';
-        printf("%s", buffer);
+        message = strncat(message, buffer, received);
         received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
     }
+    printf("%s\n", message);
+    char *output = str2md5(message, strlen(message) + 1);
+    //TODO return hash to client
+    printf("hash: %s\n", output);
     if(received < 0) {
         perror("Unable to receive");
         close(remote->fd);
@@ -183,18 +199,17 @@ void *service_udp(void *arg)
     ssize_t received = recvfrom(remote->fd, buffer, sizeof(buffer)-1, 0,
             (struct sockaddr *)&client, &client_sz);
     long type = extract_type(buffer, received);
-    while(received > 0) {
-        buffer[received] = '\0';
-        printf("%s", buffer);
-        received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
-    }
+    buffer[received] = '\0';
+    printf("%s", buffer);
+    char *output = str2md5(buffer, received + 1);
+    //TODO return hash to client
+    printf("hash: %s\n", output);
+    free(output);
     if(received < 0) {
-        perror("Unable to receive");
-        close(remote->fd);
+        perror("Unable to receive\n");
         puts("");
         free(remote);
     }
-    close(remote->fd);
     puts("");
     free(remote);
     return NULL;
@@ -205,6 +220,33 @@ long extract_type(char *message, unsigned int strLen)
     long type = strtol(&message[0], (char **)NULL, 10);
     if (type == LONG_MAX && errno == ERANGE)
         return -1;
-    memmove(message, message + 1, strLen);
+    memmove(message, message + 1, strLen - 1);
     return type;
+}
+//https://stackoverflow.com/questions/7627723/how-to-create-a-md5-hash-of-a-string-in-c
+char *str2md5(const char *str, int length) {
+    int n;
+    MD5_CTX c;
+    unsigned char digest[16];
+    char *out = (char*)malloc(33);
+
+    MD5_Init(&c);
+
+    while (length > 0) {
+        if (length > 512) {
+            MD5_Update(&c, str, 512);
+        } else {
+            MD5_Update(&c, str, length);
+        }
+        length -= 512;
+        str += 512;
+    }
+
+    MD5_Final(digest, &c);
+
+    for (n = 0; n < 16; ++n) {
+        snprintf(&(out[n*2]), 16*2, "%02x", (unsigned int)digest[n]);
+    }
+
+    return out;
 }
