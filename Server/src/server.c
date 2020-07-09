@@ -6,6 +6,8 @@
 #include <string.h>
 #include <sysexits.h>
 #include <unistd.h>
+#include <limits.h>
+#include <errno.h>
 
 #include <arpa/inet.h>
 
@@ -23,6 +25,7 @@ int max(int x, int y)
 
 void *service_tcp(void *arg);
 void *service_udp(void *arg);
+long extract_type(char *message, unsigned int strLen);
 
 struct remote_endpoint {
     int fd;
@@ -110,6 +113,11 @@ int main(int argc, char *argv[])
 
         // select the ready descriptor
         nready = select(maxfdp1, &rset, NULL, NULL, NULL);
+        if (nready < 0)
+        {
+            perror("Could not set ready descriptors");
+            continue;
+        }
         if (FD_ISSET(TCPsd, &rset)) {
             struct remote_endpoint *endpoint = malloc(sizeof(*endpoint));
             struct sockaddr_storage client;
@@ -138,30 +146,15 @@ int main(int argc, char *argv[])
             pthread_create(&tid, NULL, service_udp, endpoint);
         }
     }
-
-    close(TCPsd);
 }
 
 void *service_tcp(void *arg)
 {
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
-    struct sockaddr_storage client = remote->endpoint;
 
-    char addr[INET6_ADDRSTRLEN];
-    unsigned short port = 0;
-    if(client.ss_family == AF_INET6) {
-        inet_ntop(client.ss_family,
-                &((struct sockaddr_in6 *)&client)->sin6_addr, addr, sizeof(addr));
-        port = ntohs(((struct sockaddr_in6 *)&client)->sin6_port);
-    } else {
-        inet_ntop(client.ss_family, &((struct sockaddr_in *)&client)->sin_addr,
-                addr, sizeof(addr));
-        port = ntohs(((struct sockaddr_in *)&client)->sin_port);
-    }
-    printf("Received from %s:%hu\n", addr, port);
-
-    char buffer[128];
+    char buffer[75535];
     ssize_t received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
+    long type = extract_type(buffer, received);
     while(received > 0) {
         buffer[received] = '\0';
         printf("%s", buffer);
@@ -169,6 +162,9 @@ void *service_tcp(void *arg)
     }
     if(received < 0) {
         perror("Unable to receive");
+        close(remote->fd);
+        puts("");
+        free(remote);
     }
 
     close(remote->fd);
@@ -186,6 +182,7 @@ void *service_udp(void *arg)
     char buffer[75535];
     ssize_t received = recvfrom(remote->fd, buffer, sizeof(buffer)-1, 0,
             (struct sockaddr *)&client, &client_sz);
+    long type = extract_type(buffer, received);
     while(received > 0) {
         buffer[received] = '\0';
         printf("%s", buffer);
@@ -194,7 +191,20 @@ void *service_udp(void *arg)
     if(received < 0) {
         perror("Unable to receive");
         close(remote->fd);
-
+        puts("");
+        free(remote);
     }
+    close(remote->fd);
+    puts("");
+    free(remote);
     return NULL;
+}
+
+long extract_type(char *message, unsigned int strLen)
+{
+    long type = strtol(&message[0], (char **)NULL, 10);
+    if (type == LONG_MAX && errno == ERANGE)
+        return -1;
+    memmove(message, message + 1, strLen);
+    return type;
 }
