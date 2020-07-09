@@ -12,6 +12,15 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+
+int max(int x, int y)
+{
+    if (x > y)
+        return x;
+    else
+        return y;
+}
+
 void *service(void *arg);
 
 struct remote_endpoint {
@@ -36,9 +45,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Cannot get address: %s\n", gai_strerror(err));
         return EX_NOHOST;
     }
-
-    int sd = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-    if(sd < 0) {
+// Create TCP listener
+    int TCPsd = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
+    if(TCPsd < 0) {
         perror("Could not create socket");
         freeaddrinfo(results);
         return EX_OSERR;
@@ -47,28 +56,32 @@ int main(int argc, char *argv[])
     // Turn on reusing of the local endpoint's address,
     // in case this server is just restarted
     int on = 1;
-    err = setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+    err = setsockopt(TCPsd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
     if(err < 0) {
         perror("Could not reappropriate socket");
-        close(sd);
+        close(TCPsd);
         freeaddrinfo(results);
         return EX_OSERR;
     }
 
-    err = bind(sd, results->ai_addr, results->ai_addrlen);
+    err = bind(TCPsd, results->ai_addr, results->ai_addrlen);
     if(err < 0) {
         perror("Could not bind socket");
-        close(sd);
+        close(TCPsd);
         freeaddrinfo(results);
         return EX_OSERR;
     }
     freeaddrinfo(results);
 
+    //Setup UDP listener
+    int udpfd = socket(AF_INET, SOCK_DGRAM, 0);
+    // binding server addr structure to udp sockfd
+    bind(udpfd, results->ai_addr, results->ai_addrlen);
     // Backlog of 5 is typical
-    err = listen(sd, 5);
+    err = listen(TCPsd, 5);
     if(err < 0) {
         perror("Could not listen on socket");
-        close(sd);
+        close(TCPsd);
         return EX_OSERR;
     }
 
@@ -77,28 +90,85 @@ int main(int argc, char *argv[])
     err = sigaction(SIGCHLD, &ignorer, NULL);
     if(err < 0) {
         perror("Could not ignore children completion");
-        close(sd);
+        close(TCPsd);
         return EX_OSERR;
     }
+    //Taken from https://www.geeksforgeeks.org/tcp-and-udp-server-using-select/
+    fd_set rset;
+    int nready, maxfdp1;
+    // clear the descriptor set
+    FD_ZERO(&rset);
+
+    // get maxfd
+    maxfdp1 = max(TCPsd, udpfd) + 1;
 
     for(;;) {
-        struct remote_endpoint *endpoint = malloc(sizeof(*endpoint));
-        struct sockaddr_storage client;
-        socklen_t client_sz = sizeof(client);
+        // set listenfd and udpfd in readset
+        FD_SET(TCPsd, &rset);
+        FD_SET(udpfd, &rset);
 
-        endpoint->fd = accept(sd, (struct sockaddr *)&client, &client_sz);
-        if(endpoint->fd < 0) {
-            perror("Could not accept remote");
-            continue;
+        // select the ready descriptor
+        nready = select(maxfdp1, &rset, NULL, NULL, NULL);
+        if (FD_ISSET(TCPsd, &rset)) {
+            struct remote_endpoint *endpoint = malloc(sizeof(*endpoint));
+            struct sockaddr_storage client;
+            socklen_t client_sz = sizeof(client);
+
+            endpoint->fd = accept(TCPsd, (struct sockaddr *)&client, &client_sz);
+            if(endpoint->fd < 0) {
+                perror("Could not accept remote");
+                continue;
+            }
+
+
+
+            endpoint->endpoint = client;
+
+            pthread_t tid;
+            pthread_create(&tid, NULL, service, endpoint);
         }
+        if (FD_ISSET(udpfd, &rset)) {
+            struct remote_endpoint *endpoint = malloc(sizeof(*endpoint));
+            struct sockaddr_storage client;
+            socklen_t client_sz = sizeof(client);
 
-        endpoint->endpoint = client;
+            char addr[INET6_ADDRSTRLEN];
 
-        pthread_t tid;
-        pthread_create(&tid, NULL, service, endpoint);
+    		// Internet minimum dgram size is 576, so round down to nearest power of 2
+    		char buffer[75535];
+    		ssize_t received = recvfrom(udpfd, buffer, sizeof(buffer)-1, 0,
+    				(struct sockaddr *)&client, &client_sz);
+    		if(received < 0) {
+    			perror("Unable to receive");
+    			close(udpfd);
+    			return EX_UNAVAILABLE;
+    		}
+    		buffer[received] = '\0';
+
+    		unsigned short port = 0;
+    		if(client.ss_family == AF_INET6) {
+    			inet_ntop(client.ss_family,
+    					&((struct sockaddr_in6 *)&client)->sin6_addr,
+    					addr, sizeof(addr));
+    			port = ntohs(((struct sockaddr_in6 *)&client)->sin6_port);
+    		} else {
+    			inet_ntop(client.ss_family,
+    					&((struct sockaddr_in *)&client)->sin_addr,
+    					addr, sizeof(addr));
+    			port = ntohs(((struct sockaddr_in *)&client)->sin_port);
+    		}
+    		printf("Received from %s:%hu\n%s\n\n", addr, port, buffer);
+
+
+
+            endpoint->endpoint = client;
+
+            pthread_t tid;
+            //pthread_create(&tid, NULL, service, endpoint);
+        }
     }
 
-    close(sd);
+    close(TCPsd);
 }
 
 void *service(void *arg)
