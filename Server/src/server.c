@@ -183,29 +183,18 @@ void *service_udp(void *arg)
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
     struct sockaddr_storage client = remote->endpoint;
     socklen_t client_sz = sizeof(client);
-    char addr[INET6_ADDRSTRLEN];
     char buffer[75535];
     ssize_t received = recvfrom(remote->fd, buffer, sizeof(buffer)-1, 0,
             (struct sockaddr *)&client, &client_sz);
+    while(received > 0) {
+        buffer[received] = '\0';
+        printf("%s", buffer);
+        received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
+    }
     if(received < 0) {
         perror("Unable to receive");
         close(remote->fd);
 
     }
-    buffer[received] = '\0';
-
-    unsigned short port = 0;
-    if(client.ss_family == AF_INET6) {
-        inet_ntop(client.ss_family,
-                &((struct sockaddr_in6 *)&client)->sin6_addr,
-                addr, sizeof(addr));
-        port = ntohs(((struct sockaddr_in6 *)&client)->sin6_port);
-    } else {
-        inet_ntop(client.ss_family,
-                &((struct sockaddr_in *)&client)->sin_addr,
-                addr, sizeof(addr));
-        port = ntohs(((struct sockaddr_in *)&client)->sin_port);
-    }
-    printf("Received from %s:%hu\n%s\n\n", addr, port, buffer);
     return NULL;
 }
