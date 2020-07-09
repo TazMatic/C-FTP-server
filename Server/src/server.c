@@ -21,7 +21,8 @@ int max(int x, int y)
         return y;
 }
 
-void *service(void *arg);
+void *service_tcp(void *arg);
+void *service_udp(void *arg);
 
 struct remote_endpoint {
     int fd;
@@ -125,53 +126,23 @@ int main(int argc, char *argv[])
             endpoint->endpoint = client;
 
             pthread_t tid;
-            pthread_create(&tid, NULL, service, endpoint);
+            pthread_create(&tid, NULL, service_tcp, endpoint);
         }
         if (FD_ISSET(udpfd, &rset)) {
             struct remote_endpoint *endpoint = malloc(sizeof(*endpoint));
+            endpoint->fd = udpfd;
             struct sockaddr_storage client;
-            socklen_t client_sz = sizeof(client);
-
-            char addr[INET6_ADDRSTRLEN];
-
-    		// Internet minimum dgram size is 576, so round down to nearest power of 2
-    		char buffer[75535];
-    		ssize_t received = recvfrom(udpfd, buffer, sizeof(buffer)-1, 0,
-    				(struct sockaddr *)&client, &client_sz);
-    		if(received < 0) {
-    			perror("Unable to receive");
-    			close(udpfd);
-    			return EX_UNAVAILABLE;
-    		}
-    		buffer[received] = '\0';
-
-    		unsigned short port = 0;
-    		if(client.ss_family == AF_INET6) {
-    			inet_ntop(client.ss_family,
-    					&((struct sockaddr_in6 *)&client)->sin6_addr,
-    					addr, sizeof(addr));
-    			port = ntohs(((struct sockaddr_in6 *)&client)->sin6_port);
-    		} else {
-    			inet_ntop(client.ss_family,
-    					&((struct sockaddr_in *)&client)->sin_addr,
-    					addr, sizeof(addr));
-    			port = ntohs(((struct sockaddr_in *)&client)->sin_port);
-    		}
-    		printf("Received from %s:%hu\n%s\n\n", addr, port, buffer);
-
-
-
             endpoint->endpoint = client;
 
             pthread_t tid;
-            //pthread_create(&tid, NULL, service, endpoint);
+            pthread_create(&tid, NULL, service_udp, endpoint);
         }
     }
 
     close(TCPsd);
 }
 
-void *service(void *arg)
+void *service_tcp(void *arg)
 {
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
     struct sockaddr_storage client = remote->endpoint;
@@ -189,7 +160,6 @@ void *service(void *arg)
     }
     printf("Received from %s:%hu\n", addr, port);
 
-    // Use a small buffer for such a demo program
     char buffer[128];
     ssize_t received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
     while(received > 0) {
@@ -205,5 +175,37 @@ void *service(void *arg)
     puts("");
     free(remote);
 
+    return NULL;
+}
+
+void *service_udp(void *arg)
+{
+    struct remote_endpoint *remote = (struct remote_endpoint *)arg;
+    struct sockaddr_storage client = remote->endpoint;
+    socklen_t client_sz = sizeof(client);
+    char addr[INET6_ADDRSTRLEN];
+    char buffer[75535];
+    ssize_t received = recvfrom(remote->fd, buffer, sizeof(buffer)-1, 0,
+            (struct sockaddr *)&client, &client_sz);
+    if(received < 0) {
+        perror("Unable to receive");
+        close(remote->fd);
+
+    }
+    buffer[received] = '\0';
+
+    unsigned short port = 0;
+    if(client.ss_family == AF_INET6) {
+        inet_ntop(client.ss_family,
+                &((struct sockaddr_in6 *)&client)->sin6_addr,
+                addr, sizeof(addr));
+        port = ntohs(((struct sockaddr_in6 *)&client)->sin6_port);
+    } else {
+        inet_ntop(client.ss_family,
+                &((struct sockaddr_in *)&client)->sin_addr,
+                addr, sizeof(addr));
+        port = ntohs(((struct sockaddr_in *)&client)->sin_port);
+    }
+    printf("Received from %s:%hu\n%s\n\n", addr, port, buffer);
     return NULL;
 }

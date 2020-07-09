@@ -10,8 +10,7 @@ class package:
         self.content = content
 
     def send(self, sock):
-        sock.send(bytes(self.type))
-        sock.sendall(bytes(self.content))
+        sock.send(bytes(str(self.type) + self.content))
 
 
 def parseCMD():
