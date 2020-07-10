@@ -198,23 +198,26 @@ void *service_tcp(void *arg)
 void *service_udp(void *arg)
 {
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
-    struct sockaddr_storage client = remote->endpoint;
-    socklen_t client_sz = sizeof(client);
+    //struct sockaddr_storage client = remote->endpoint;
+    struct sockaddr_in cliaddr;
+    socklen_t client_sz = sizeof(cliaddr);
     char buffer[75535];
     ssize_t received = recvfrom(remote->fd, buffer, sizeof(buffer)-1, 0,
-            (struct sockaddr *)&client, &client_sz);
+                 (struct sockaddr*)&cliaddr, &client_sz);
     long type = extract_type(buffer, received);
     buffer[received] = '\0';
     printf("%s", buffer);
-    char *output = str2md5(buffer, received + 1);
     //TODO return hash to client
-    /*ssize_t sent = sendto(sd, argv[3], strlen(argv[3]), 0,
-			remote->ai_addr, remote->ai_addrlen);
-	if(sent < 0) {
-		perror("Unable to send");
-    }*/
-    printf("hash: %s\n", output);
-    free(output);
+    if (buffer[strlen(buffer) - 1] == 3 && buffer[strlen(buffer) - 2] == 3)
+    {
+        buffer[strlen(buffer) - 2] = '\0';
+        // Send hash to Client
+        char *output = str2md5(buffer, strlen(buffer));
+        sendto(remote->fd, (const char*)output, strlen(output), 0,
+                   (struct sockaddr*)&cliaddr, sizeof(cliaddr));
+        printf("hash: %s\n", output);
+        free(output);
+    }
     if(received < 0) {
         perror("Unable to receive\n");
         puts("");
