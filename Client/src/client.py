@@ -10,7 +10,7 @@ class package:
         self.content = content
 
     def send(self, sock):
-        sock.send(bytes(str(self.type) + self.content))
+        sock.send(bytes(str(self.type) + self.content + chr(3) + chr(3)))
 
 
 def parseCMD():
@@ -41,23 +41,27 @@ def main():
         sock.connect((args.hostname, args.port))
 
         # Send files to server
-        for file in args.files:
-            try:
+        try:
+            for file in args.files:
                 if os.stat(file).st_size > 0:
                     FHandle = open(file, "r")
                     data = package(0, FHandle.read())
                     # send contents
                     data.send(sock)
+                    response = sock.recv(1024)
+                    if response:
+                        print("Response", response)
+                    else:
+                        print('no data received')
                 else:
                     print("Invalid file type, Skipping ({})".format(file))
-                    continue
-            except OSError:
-                print("Unable to open", file)
-            finally:
-                sock.close()
+        except OSError:
+            print("Unable to open", file)
+        finally:
+            sock.close()
 
     except socket.error as e:
-        print(e)
+        print("here", e)
 
 if __name__ == '__main__':
     try:

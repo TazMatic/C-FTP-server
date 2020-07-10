@@ -153,14 +153,11 @@ int main(int argc, char *argv[])
 void *service_tcp(void *arg)
 {
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
-
     char buffer[75535];
     //TODO ABC
     char *message = malloc(75535);
     unsigned int message_size = 75535;
     ssize_t received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
-    long type = extract_type(buffer, received);
-    //TODO build a full message string to get hash and return it to cient
     while(received > 0) {
         if (strlen(message) + received > message_size)
         {
@@ -170,12 +167,20 @@ void *service_tcp(void *arg)
         }
         buffer[received] = '\0';
         message = strncat(message, buffer, received);
+        // Check for end of file signature
+        if (message[strlen(message) - 1] == 3 && message[strlen(message) - 2] == 3)
+        {
+            long type = extract_type(message, strlen(message));
+            message[strlen(message) - 2] = '\0';
+            // Send hash to Client
+            char *output = str2md5(message, strlen(message));
+            send(remote->fd, output, strlen(output), 0);
+            printf("hash: %s\n", output);
+            message[0] = '\0';
+        }
+        // Blocks here until connection is terminated
         received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
     }
-    printf("%s\n", message);
-    char *output = str2md5(message, strlen(message) + 1);
-    //TODO return hash to client
-    printf("hash: %s\n", output);
     if(received < 0) {
         perror("Unable to receive");
         close(remote->fd);
@@ -203,6 +208,11 @@ void *service_udp(void *arg)
     printf("%s", buffer);
     char *output = str2md5(buffer, received + 1);
     //TODO return hash to client
+    /*ssize_t sent = sendto(sd, argv[3], strlen(argv[3]), 0,
+			remote->ai_addr, remote->ai_addrlen);
+	if(sent < 0) {
+		perror("Unable to send");
+    }*/
     printf("hash: %s\n", output);
     free(output);
     if(received < 0) {
