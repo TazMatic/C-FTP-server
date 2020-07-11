@@ -171,8 +171,8 @@ void *service_tcp(void *arg)
         if (message[strlen(message) - 1] == 3 && message[strlen(message) - 2] == 3)
         {
             long type = extract_type(message, strlen(message));
-            buffer[strlen(buffer) - 2] = '\0';
-            buffer[strlen(buffer) - 1] = '\0';
+            message[strlen(message) - 2] = '\0';
+            message[strlen(message) - 1] = '\0';
             printf("%s\n", message);
             // Send hash to Client
             char *output = str2md5(message, strlen(message));
