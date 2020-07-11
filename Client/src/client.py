@@ -81,9 +81,7 @@ def main():
                 usrInput = input("")
                 data = package(1, usrInput)
                 # send contents
-                print("Made it 1")
                 data.send(sock)
-                print("Made it 2")
                 response = sock.recv(1024)
                 if response:
                     print("Response", response)

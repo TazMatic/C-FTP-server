@@ -8,11 +8,14 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include <arpa/inet.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+
 #include <openssl/md5.h>
 
 #include "Database.h"
@@ -41,6 +44,12 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
         return EX_USAGE;
     }
+    // Create storage folder
+    //https://stackoverflow.com/a/7430262
+    struct stat st = {0};
+    if (stat("Storage", &st) == -1) {
+    mkdir("Storage", 0777);
+}
 
     struct addrinfo hints = {0};
     hints.ai_family = PF_UNSPEC;
@@ -52,7 +61,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Cannot get address: %s\n", gai_strerror(err));
         return EX_NOHOST;
     }
-// Create TCP listener
+    // Create TCP listener
     int TCPsd = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
     if(TCPsd < 0) {
         perror("Could not create socket");
@@ -181,13 +190,38 @@ void *service_tcp(void *arg)
             // Process Message
             if (type == 0)
             {
-                //TODO create file with hash name + epoch
-                //printf("hash: %s\n", output);
+                //Create file with hash
+                char* path = realpath("Storage", NULL);
+                char* filename = malloc(strlen(path) + strlen(output) + 1);
+                sprintf (filename, "%s/%s", path, output);
+                FILE *fd = fopen(filename, "w");
+                if (!fd)
+                {
+                    free(filename);
+                    perror("Unable to write file out");
+                    break;
+                }
+                fprintf(fd, "%s", message);
+                fclose(fd);
+                free(filename);
             }
             else if (type == 1)
             {
-                //TODO Add to data base
-                int db = record_open((char *)"storage/Database");
+                //Add to data base
+                message_rec rec;
+                int db;
+                rec.key = *output * (unsigned long)time(NULL);
+                rec.message_hash = output;
+                rec.message = message;
+                if ((db = record_open((char *)"Database")) < 0)
+                {
+                    perror("Failed to open database");
+                }
+                if (insert_record(db, &rec) < 0)
+                {
+                    perror("Failed to log message");
+                }
+                close(db);
             }
             message[0] = '\0';
             free(output);
@@ -203,7 +237,6 @@ void *service_tcp(void *arg)
     }
 
     close(remote->fd);
-    puts("");
     free(remote);
 
     return NULL;
@@ -232,7 +265,39 @@ void *service_udp(void *arg)
 
         if (type == 0)
         {
-
+            //Create file with hash
+            char* path = realpath("Storage", NULL);
+            char* filename = malloc(strlen(path) + strlen(output) + 1);
+            sprintf (filename, "%s/%s", path, output);
+            FILE *fd = fopen(filename, "w");
+            if (!fd)
+            {
+                free(filename);
+                perror("Unable to write file out");
+            }
+            else
+            {
+                fprintf(fd, "%s", buffer);
+                fclose(fd);
+                free(filename);
+            }
+        }
+        else if (type == 1)
+        {
+            message_rec rec;
+            int db;
+            rec.key = *output * (unsigned long)time(NULL);
+            rec.message_hash = output;
+            rec.message = buffer;
+            if ((db = record_open((char *)"Database")) < 0)
+            {
+                perror("Failed to open database");
+            }
+            if (insert_record(db, &rec) < 0)
+            {
+                perror("Failed to log message");
+            }
+            close(db);
         }
         free(output);
     }
@@ -241,7 +306,6 @@ void *service_udp(void *arg)
         puts("");
         free(remote);
     }
-    puts("");
     free(remote);
     return NULL;
 }

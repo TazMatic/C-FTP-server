@@ -12,14 +12,6 @@
 int record_open(char *filename)
 {
     int fd = open(filename, O_CREAT | O_RDWR | O_APPEND, 0664);
-
-    // Check file descriptor
-    if (fd < 0)
-    {
-        perror("Unable to open database");
-        return fd;
-    }
-
     return fd;
 }
 

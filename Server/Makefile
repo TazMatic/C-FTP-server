@@ -27,4 +27,4 @@ profile: all
 	mv $(PROG1) $(PROG1)_profile
 
 clean:
-	$(RM) src/*.[io] test/*.[io] $(PROG1)* test/testAll gmon.out
+	$(RM) src/*.[io] test/*.[io] $(PROG1)* test/testAll gmon.out src/Database
