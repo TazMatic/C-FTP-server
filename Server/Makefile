@@ -9,7 +9,7 @@ all: $(PROG1)
 $(PROG1): src/$(PROG1)
 	mv src/$(PROG1) .
 
-src/$(PROG1): src/$(PROG1).o
+src/$(PROG1): src/$(PROG1).o src/Database.o
 
 .PHONY: clean debug $(PROG1)all check profile
 

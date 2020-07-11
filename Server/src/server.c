@@ -15,6 +15,7 @@
 #include <sys/types.h>
 #include <openssl/md5.h>
 
+#include "Database.h"
 
 int max(int x, int y)
 {
@@ -79,9 +80,9 @@ int main(int argc, char *argv[])
     }
     freeaddrinfo(results);
 
-    //Setup UDP listener
+    // Setup UDP listener
     int udpfd = socket(AF_INET, SOCK_DGRAM, 0);
-    // binding server addr structure to udp sockfd
+    // Binding server addr structure to udp sockfd
     bind(udpfd, results->ai_addr, results->ai_addrlen);
     // Backlog of 5 is typical
     err = listen(TCPsd, 5);
@@ -105,15 +106,15 @@ int main(int argc, char *argv[])
     // clear the descriptor set
     FD_ZERO(&rset);
 
-    // get maxfd
+    // Get maxfd
     maxfdp1 = max(TCPsd, udpfd) + 1;
 
     for(;;) {
-        // set listenfd and udpfd in readset
+        // Set listenfd and udpfd in readset
         FD_SET(TCPsd, &rset);
         FD_SET(udpfd, &rset);
 
-        // select the ready descriptor
+        // Select the ready descriptor
         nready = select(maxfdp1, &rset, NULL, NULL, NULL);
         if (nready < 0)
         {
@@ -170,15 +171,26 @@ void *service_tcp(void *arg)
         // Check for end of file signature
         if (message[strlen(message) - 1] == 3 && message[strlen(message) - 2] == 3)
         {
-            long type = extract_type(message, strlen(message));
+            // Format Message
             message[strlen(message) - 2] = '\0';
             message[strlen(message) - 1] = '\0';
-            printf("%s\n", message);
+            long type = extract_type(message, strlen(message));
             // Send hash to Client
             char *output = str2md5(message, strlen(message));
             send(remote->fd, output, strlen(output), 0);
-            printf("hash: %s\n", output);
+            // Process Message
+            if (type == 0)
+            {
+                //TODO create file with hash name + epoch
+                //printf("hash: %s\n", output);
+            }
+            else if (type == 1)
+            {
+                //TODO Add to data base
+                int db = record_open((char *)"storage/Database");
+            }
             message[0] = '\0';
+            free(output);
         }
         // Blocks here until connection is terminated
         received = recv(remote->fd, buffer, sizeof(buffer)-1, 0);
@@ -200,7 +212,6 @@ void *service_tcp(void *arg)
 void *service_udp(void *arg)
 {
     struct remote_endpoint *remote = (struct remote_endpoint *)arg;
-    //struct sockaddr_storage client = remote->endpoint;
     struct sockaddr_in cliaddr;
     socklen_t client_sz = sizeof(cliaddr);
     char buffer[75535];
@@ -209,18 +220,20 @@ void *service_udp(void *arg)
     long type = extract_type(buffer, received);
     buffer[received] = '\0';
 
-    //TODO return hash to client
+    // Return hash to client
     if (buffer[strlen(buffer) - 1] == 3 && buffer[strlen(buffer) - 2] == 3)
     {
         buffer[strlen(buffer) - 2] = '\0';
         buffer[strlen(buffer) - 1] = '\0';
-        printf("%s\n", buffer);
-
         // Send hash to Client
         char *output = str2md5(buffer, strlen(buffer));
         sendto(remote->fd, (const char*)output, strlen(output), 0,
                    (struct sockaddr*)&cliaddr, sizeof(cliaddr));
-        printf("hash: %s\n", output);
+
+        if (type == 0)
+        {
+
+        }
         free(output);
     }
     if(received < 0) {
