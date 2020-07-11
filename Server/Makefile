@@ -11,10 +11,18 @@ $(PROG1): src/$(PROG1)
 
 src/$(PROG1): src/$(PROG1).o src/Database.o
 
-.PHONY: clean debug $(PROG1)all check profile
+.PHONY: clean debug $(PROG1)all check profile testall
 
-check:
-	test/test.sh
+check: $(PROG1)
+check: test/testAll
+	./test/testAll
+
+TESTOBJS = $(subst .c,.o,$(wildcard test/test*.c))
+test/testAll: $(TESTOBJS) src/Database.o
+test/testAll: CFLAGS += -I src -g
+test/testAll: LDFLAGS += -L src
+test/testAll: LDLIBS += -lcunit
+
 
 debug: CFLAGS += -g
 debug: all

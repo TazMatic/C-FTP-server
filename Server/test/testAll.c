@@ -4,10 +4,12 @@
 int
 main(void)
 {
+    extern CU_SuiteInfo DatabaseSuite;
     //extern CU_SuiteInfo ServerSuite;
 
     CU_SuiteInfo suites[] = {
         // Name, suiteSetup,suiteTeardown,testSetup,testTeardown,arrayOfTests
+            DatabaseSuite,
             CU_SUITE_INFO_NULL
     };
 
