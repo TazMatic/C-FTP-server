@@ -171,7 +171,9 @@ void *service_tcp(void *arg)
         if (message[strlen(message) - 1] == 3 && message[strlen(message) - 2] == 3)
         {
             long type = extract_type(message, strlen(message));
-            message[strlen(message) - 2] = '\0';
+            buffer[strlen(buffer) - 2] = '\0';
+            buffer[strlen(buffer) - 1] = '\0';
+            printf("%s\n", message);
             // Send hash to Client
             char *output = str2md5(message, strlen(message));
             send(remote->fd, output, strlen(output), 0);
@@ -206,11 +208,14 @@ void *service_udp(void *arg)
                  (struct sockaddr*)&cliaddr, &client_sz);
     long type = extract_type(buffer, received);
     buffer[received] = '\0';
-    printf("%s", buffer);
+
     //TODO return hash to client
     if (buffer[strlen(buffer) - 1] == 3 && buffer[strlen(buffer) - 2] == 3)
     {
         buffer[strlen(buffer) - 2] = '\0';
+        buffer[strlen(buffer) - 1] = '\0';
+        printf("%s\n", buffer);
+
         // Send hash to Client
         char *output = str2md5(buffer, strlen(buffer));
         sendto(remote->fd, (const char*)output, strlen(output), 0,
@@ -238,7 +243,6 @@ long extract_type(char *message, unsigned int strLen)
 }
 //https://stackoverflow.com/questions/7627723/how-to-create-a-md5-hash-of-a-string-in-c
 char *str2md5(const char *str, int length) {
-    int n;
     MD5_CTX c;
     unsigned char digest[16];
     char *out = (char*)malloc(33);
@@ -257,7 +261,7 @@ char *str2md5(const char *str, int length) {
 
     MD5_Final(digest, &c);
 
-    for (n = 0; n < 16; ++n) {
+    for (int n = 0; n < 16; ++n) {
         snprintf(&(out[n*2]), 16*2, "%02x", (unsigned int)digest[n]);
     }
 
